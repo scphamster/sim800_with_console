@@ -75,6 +75,12 @@ CONFIG_BOOTLOADER_FLASH_XMC_SUPPORT=y
 # end of Security features
 
 #
+# Example Configuration
+#
+CONFIG_STORE_HISTORY=y
+# end of Example Configuration
+
+#
 # Serial flasher config
 #
 CONFIG_ESPTOOLPY_BAUD_OTHER_VAL=115200
@@ -125,12 +131,6 @@ CONFIG_PARTITION_TABLE_FILENAME="partitions_example.csv"
 CONFIG_PARTITION_TABLE_OFFSET=0x8000
 CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
-
-#
-# Example Configuration
-#
-CONFIG_STORE_HISTORY=y
-# end of Example Configuration
 
 #
 # Compiler options
