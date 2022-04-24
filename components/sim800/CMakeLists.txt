@@ -1,6 +1,6 @@
 set(source
     "main/sim800.c" 
-    "console/console_commands.c" 
+    "console/console.c" 
     "console/console_helper.c"
     "gsm/gsm.c")
 
