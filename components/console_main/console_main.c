@@ -1,4 +1,5 @@
 #include "sdkconfig.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -7,26 +8,24 @@
 
 #include "esp_log.h"
 #include "esp_system.h"
-
-#include "driver/uart.h"
-
 #include "esp_console.h"
 #include "esp_vfs_dev.h"
 #include "esp_vfs_fat.h"
-#include "linenoise/linenoise.h"
+
 #include "nvs.h"
 #include "nvs_flash.h"
 
 #include "argtable3/argtable3.h"
+#include "linenoise/linenoise.h"
+
+#include "driver/uart.h"
+
 #include "cmd_decl.h"
+
 
 #define PROMPT_STR CONFIG_IDF_TARGET
 
 static const char *TAG = "CONSOLE";
-
-static const char *my_console_command = "mycommand";
-static const char *my_console_command_help = "this is my command";
-static const char *my_console_command_hint = "this is hint of mycommand";
 
 int
 my_test_console_function(int argc, char **argv)
@@ -130,7 +129,7 @@ initialize_console(void)
 }
 
 static void
-initialize_all(void)
+_init(void)
 {
 #if CONFIG_STORE_HISTORY
     initialize_filesystem();
@@ -141,14 +140,6 @@ initialize_all(void)
 
     initialize_console();
     esp_console_register_help_command();
-
-    esp_console_cmd_t mycommand = { .command  = my_console_command,
-                                    .help     = my_console_command_help,
-                                    .hint     = my_console_command_hint,
-                                    .func     = my_test_console_function,
-                                    .argtable = NULL };
-
-    esp_console_cmd_register(&mycommand);
 
     register_system();
     register_wifi();
@@ -165,7 +156,7 @@ console_task(void *arg)
 
     ESP_LOGI(TAG, "Initializing console");
 
-    initialize_all();
+    _init();
 
     /* Figure out if the terminal supports escape sequences */
     int probe_status = linenoiseProbe();
