@@ -1,0 +1,7 @@
+#pragma once
+
+#define SMS_SEND_CMD_NUMBER_MINCOUNT  0
+#define SMS_SEND_CMD_NUMBER_MAXCOUNT  15   //"+CC123456789" => 13 symbols (\0 included) + 2 safety
+#define SEND_SMS_CMD_MESSAGE_MINCOUNT 0
+#define SEND_SMS_CMD_MESSAGE_MAXCOUNT 50
+#define SEND_SMS_CMD_ARGUMENT_NUM     2

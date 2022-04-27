@@ -133,6 +133,7 @@ _init(void)
 {
 #if CONFIG_STORE_HISTORY
     initialize_filesystem();
+
     ESP_LOGI(TAG, "Command history enabled");
 #else
     ESP_LOGI(TAG, "Command history disabled");
@@ -144,6 +145,7 @@ _init(void)
     register_system();
     register_wifi();
     register_nvs();
+    register_send_sms();
 }
 
 void

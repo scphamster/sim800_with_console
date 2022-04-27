@@ -112,6 +112,7 @@ console_cmd_handler(int argc, char **argv)
     esp_err_t         retval;
     gsm_console_cmd_t cmd;
     char              err[CONFIG_GSM_CONSOLE_ERR_DESCR_LEN];
+
     argv++;
     argc--;
 
