@@ -44,6 +44,8 @@
 #include "lwip/apps/sntp.h"
 #include "cJSON.h"
 
+#include "cmd_gsm.h"
+
 #include "gsm.h"
 #include "sim800.h"
 #include "console_commands.h"
@@ -66,6 +68,7 @@
 #define TASK_SEMAPHORE_WAIT 140000   // time to wait for mutex in miliseconds
 
 QueueHandle_t http_mutex;
+QueueHandle_t sms_queue;
 
 static bool g_sms_number_not_default = false;
 
@@ -1193,7 +1196,7 @@ sim800_startUP(void)
     esp_err_t err;
     char      err_buf[CONFIG_ERR_BUFLEN];
 
-    console_commands_init();
+    //console_commands_init();
     configure_pins();
     sim800_switch_power(true);
     indication_led_switch(true);
@@ -1210,6 +1213,7 @@ sim800_startUP(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+
     wifi_config_t apConfig = {
         .ap = { .ssid            = "ESP32_TESTAP",
                 .ssid_len        = 0,

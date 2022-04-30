@@ -1177,6 +1177,12 @@ CONFIG_GSM_SEND_SMS=y
 CONFIG_GSM_SMS_NUMBER="+48727801958"
 CONFIG_GSM_SMS_INTERVAL=300000
 # end of GSM PPPoS configuration
+
+#
+# GSM console
+#
+CONFIG_GSM_CONSOLE_DEBUG=y
+# end of GSM console
 # end of Component config
 
 #

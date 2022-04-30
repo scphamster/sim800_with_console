@@ -13,7 +13,8 @@ set(priv_req
     "nvs_flash" 
     "json" 
     "esp_common" 
-    "console" )
+    "console"
+    "myconsole" )
 
 idf_component_register(SRCS ${source} 
                         PRIV_REQUIRES ${priv_req}
