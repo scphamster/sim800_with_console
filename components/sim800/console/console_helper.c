@@ -33,7 +33,7 @@ console_helper_init(void)
 }
 
 static inline esp_err_t
-_find_name(char **argv, gsm_console_cmd_t *cmd, char *err)
+_find_cmd_name(char **argv, gsm_console_cmd_t *cmd, char *err)
 {
     ESP_LOGI(TAG, "*argv = %s", *argv);
     
@@ -169,7 +169,7 @@ _find_params_cmd_send_sms(int argc, char **argv, gsm_console_cmd_t *cmd, char *e
 }
 
 static esp_err_t
-_find_params(int argc, char **argv, gsm_console_cmd_t *cmd, char *err)
+_find_cmd_params(int argc, char **argv, gsm_console_cmd_t *cmd, char *err)
 {
     if (argc <= 0) {
         cmd->params_qty = 0;
@@ -245,7 +245,7 @@ console_helper_decode_raw_command(int argc, char **argv, gsm_console_cmd_t *cmd,
 {
     esp_err_t retval;
 
-    retval = _find_name(argv, cmd, err);
+    retval = _find_cmd_name(argv, cmd, err);
     if (retval != ESP_OK) {
         err = 1 + strrchr(err, '\n');
 
@@ -257,7 +257,7 @@ console_helper_decode_raw_command(int argc, char **argv, gsm_console_cmd_t *cmd,
     argv++;
     argc--;
 
-    retval = _find_params(argc, argv, cmd, err);
+    retval = _find_cmd_params(argc, argv, cmd, err);
     if (retval != ESP_OK) {
         err = 1 + strrchr(err, '\n');
 

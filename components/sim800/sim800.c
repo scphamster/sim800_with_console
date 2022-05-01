@@ -2,10 +2,12 @@
 
 #include "sdkconfig.h"
 #include <string.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"
+
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
@@ -46,15 +48,13 @@
 
 #include "gsm.h"
 #include "sim800.h"
-#include "console_commands.h"
+#include "cmd_gsm.h"
+#include "sms.h"
 
-#define CONFIG_ERR_BUFLEN 30
+#include "lillygo.h"
+//#include "console_commands.h"
 
-#define INDICATION_LED_PIN 13
 
-#define SIM800_PWR_EN_PIN 23
-#define SIM800_PWR_ON     true
-#define SIM800_PWR_OFF    false
 
 #ifdef CONFIG_GSM_USE_WIFI_AP
 #include "lwip/api.h"
@@ -62,12 +62,11 @@
 #include "lwip/netdb.h"
 #endif
 
-#define EXAMPLE_TASK_PAUSE  300      // pause between task runs in seconds
+#define EXAMPLE_TASK_PAUSE  5        // pause between task runs in seconds
 #define TASK_SEMAPHORE_WAIT 140000   // time to wait for mutex in miliseconds
 
 QueueHandle_t http_mutex;
-
-static bool g_sms_number_not_default = false;
+QueueHandle_t sms_config_queue;
 
 static const char *TIME_TAG  = "[SNTP]";
 static const char *HTTP_TAG  = "[HTTP]";
@@ -246,10 +245,9 @@ https_get_task(void *pvParameters)
 
     ESP_LOGI(HTTPS_TAG, "Loading the CA root certificate...");
 
-    ret = mbedtls_x509_crt_parse(
-      &cacert,
-      server_root_cert_pem_start,
-      server_root_cert_pem_end - server_root_cert_pem_start);
+    ret = mbedtls_x509_crt_parse(&cacert,
+                                 server_root_cert_pem_start,
+                                 server_root_cert_pem_end - server_root_cert_pem_start);
 
     if (ret < 0) {
         ESP_LOGE(HTTPS_TAG, "mbedtls_x509_crt_parse returned -0x%x\n\n", -ret);
@@ -272,12 +270,10 @@ https_get_task(void *pvParameters)
 
     ESP_LOGI(HTTPS_TAG, "Setting up the SSL/TLS structure...");
 
-    if (
-      (ret = mbedtls_ssl_config_defaults(
-         &conf,
-         MBEDTLS_SSL_IS_CLIENT,
-         MBEDTLS_SSL_TRANSPORT_STREAM,
-         MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
+    if ((ret = mbedtls_ssl_config_defaults(&conf,
+                                           MBEDTLS_SSL_IS_CLIENT,
+                                           MBEDTLS_SSL_TRANSPORT_STREAM,
+                                           MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
         ESP_LOGE(HTTPS_TAG, "mbedtls_ssl_config_defaults returned %d", ret);
         goto exit;
     }
@@ -301,9 +297,8 @@ https_get_task(void *pvParameters)
 
     while (1) {
         if (!(xSemaphoreTake(http_mutex, TASK_SEMAPHORE_WAIT))) {
-            ESP_LOGE(
-              HTTPS_TAG,
-              "===== ERROR: CANNOT GET MUTEX ===================================\n");
+            ESP_LOGE(HTTPS_TAG,
+                     "===== ERROR: CANNOT GET MUTEX ===================================\n");
             vTaskDelay(30000 / portTICK_PERIOD_MS);
             continue;
         }
@@ -319,12 +314,10 @@ start:
 
         ESP_LOGI(HTTPS_TAG, "Connecting to %s:%s...", SSL_WEB_SERVER, SSL_WEB_PORT);
 
-        if (
-          (ret = mbedtls_net_connect(
-             &server_fd,
-             SSL_WEB_SERVER,
-             SSL_WEB_PORT,
-             MBEDTLS_NET_PROTO_TCP)) != 0) {
+        if ((ret = mbedtls_net_connect(&server_fd,
+                                       SSL_WEB_SERVER,
+                                       SSL_WEB_PORT,
+                                       MBEDTLS_NET_PROTO_TCP)) != 0) {
             ESP_LOGE(HTTPS_TAG, "mbedtls_net_connect returned -%x", -ret);
             goto exit;
         }
@@ -357,10 +350,9 @@ start:
 
         ESP_LOGI(HTTPS_TAG, "Writing HTTP request...");
 
-        while (
-          (ret =
-             mbedtls_ssl_write(&ssl, (const unsigned char *)SSL_REQUEST, strlen(SSL_REQUEST))) <=
-          0) {
+        while ((ret = mbedtls_ssl_write(&ssl,
+                                        (const unsigned char *)SSL_REQUEST,
+                                        strlen(SSL_REQUEST))) <= 0) {
             if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
                 ESP_LOGE(HTTPS_TAG, "mbedtls_ssl_write returned -0x%x", -ret);
                 goto exit;
@@ -443,9 +435,8 @@ exit:
 
 finished:
         ESP_LOGI(HTTPS_TAG, "Waiting %d sec...", EXAMPLE_TASK_PAUSE);
-        ESP_LOGI(
-          HTTPS_TAG,
-          "=================================================================\n\n");
+        ESP_LOGI(HTTPS_TAG,
+                 "=================================================================\n\n");
         xSemaphoreGive(http_mutex);
         for (int countdown = EXAMPLE_TASK_PAUSE; countdown >= 0; countdown--) {
             vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -491,9 +482,8 @@ http_get_task(void *pvParameters)
 
     while (1) {
         if (!(xSemaphoreTake(http_mutex, TASK_SEMAPHORE_WAIT))) {
-            ESP_LOGE(
-              HTTP_TAG,
-              "===== ERROR: CANNOT GET MUTEX ==================================\n");
+            ESP_LOGE(HTTP_TAG,
+                     "===== ERROR: CANNOT GET MUTEX ==================================\n");
 
             vTaskDelay(30000 / portTICK_PERIOD_MS);
             continue;
@@ -615,12 +605,11 @@ start:
             printf("Data:\r\n-----\r\n%s\r\n-----\r\n", hdr_end_ptr);
         }
 
-        ESP_LOGI(
-          HTTP_TAG,
-          "... done reading from socket. %d bytes read, %d in buffer, errno=%d\r\n",
-          totlen,
-          rlen,
-          errno);
+        ESP_LOGI(HTTP_TAG,
+                 "... done reading from socket. %d bytes read, %d in buffer, errno=%d\r\n",
+                 totlen,
+                 rlen,
+                 errno);
         close(s);
 
         // We can disconnect from Internet now and turn off RF to save power
@@ -637,31 +626,42 @@ finished:
 }
 
 #ifdef CONFIG_GSM_SEND_SMS
-
-//======================================
 static void
 sms_task(void *pvParameters)
 {
-    sms_config_t sms_newconfig;
-    char  sms_number[15];
-    char  sms_text[100];
+    char                 buf[160];
+    esp_err_t            retval;
+    cmd_gsm_queue_item_t newconfig;
+    cmd_gsm_queue_item_t config;
+    SMS_Messages         messages;
 
-    strcpy(sms_number, CONFIG_GSM_SMS_NUMBER);
-    strcpy(sms_text, "default_text_test");
+    config.msg.phone_number = NULL;
+    config.msg.text         = NULL;
 
-    if (!(xSemaphoreTake(http_mutex, TASK_SEMAPHORE_WAIT))) {
-        ESP_LOGE(SMS_TAG, "*** ERROR: CANNOT GET MUTEX ***n");
+    config.msg.phone_number = (char *)malloc(sizeof(char) * (SMS_PHONE_NUM_MAXLEN + 1));
+    config.msg.text         = (char *)malloc(sizeof(char) * (SMS_TEXT_MAXLEN + 1));
 
-        vTaskDelete(NULL);
+    if ((config.msg.phone_number == NULL) || (config.msg.text == NULL)) {
+        ESP_LOGE(TAG, "memmory allocation for sms items has not succeed");
+        goto endtask;
     }
 
-    SMS_Messages messages;
-    uint32_t     sms_time = 0;
-    char         buf[160];
-
-    goto start;
+    sms_prepare_defaults(&config);
 
     while (1) {
+        retval = xQueueReceive(sms_config_queue, &newconfig, 1000 / portTICK_PERIOD_MS);
+
+        if (retval == pdTRUE) {
+            sms_copy_config_data(&config, &newconfig);
+        }
+        else {
+            continue;
+        }
+
+        if (!(config.send_sms || config.read_sms)) {
+            continue;
+        }
+
         if (!(xSemaphoreTake(http_mutex, TASK_SEMAPHORE_WAIT))) {
             ESP_LOGE(SMS_TAG, "===== ERROR: CANNOT GET MUTEX ==================================\n");
 
@@ -669,35 +669,21 @@ sms_task(void *pvParameters)
 
             continue;
         }
-start:
-        ESP_LOGI(SMS_TAG, "===== SMS TEST =================================================\n");
 
-        // ** For SMS operations we have to off line **
-        ppposDisconnect(0, 0);
-        gsm_RFOn();   // Turn on RF if it was turned off
-        vTaskDelay(2000 / portTICK_RATE_MS);
+        ESP_LOGI(SMS_TAG, "============== SMS ============\n");
 
-        if (clock() > sms_time) {
-            if (smsSend(sms_number, sms_text) == 1) {
-                printf("SMS sent successfully\r\n");
-            }
-            else {
-                printf("SMS send failed\r\n");
-            }
+        sms_prepare_to_use_sms();
+        // TODO: sms_read_messages();
 
-            sms_time = clock() + CONFIG_GSM_SMS_INTERVAL;   // next sms send time
+        if (config.read_sms) {
+            smsRead(&messages, -1);
         }
 
-msg_read:
-        smsRead(&messages, -1);
-
         if (messages.nmsg) {
-            // handle received messages
-
             SMS_Msg *msg;
             msg = messages.messages;
 
-            printf("\r\nReceived messages: %d\r\n", messages.nmsg);
+            printf("\r\nReceived messages number: %d\r\n", messages.nmsg);
 
             for (int i = 0; i < messages.nmsg; i++) {
                 struct tm *timeinfo;
@@ -706,16 +692,15 @@ msg_read:
 
                 timeinfo = localtime(&msg->time_value);
                 printf("-------------------------------------------\r\n");
-                printf(
-                  "Message #%d: idx=%d, from: %s, status: %s, time: %s, tz=GMT+%d, timestamp: "
-                  "%s\r\n",
-                  i + 1,
-                  msg->idx,
-                  msg->from,
-                  msg->stat,
-                  msg->time,
-                  msg->tz,
-                  asctime(timeinfo));
+                printf("Message #%d: idx=%d, from: %s, status: %s, time: %s, tz=GMT+%d, timestamp: "
+                       "%s\r\n",
+                       i + 1,
+                       msg->idx,
+                       msg->from,
+                       msg->stat,
+                       msg->time,
+                       msg->tz,
+                       asctime(timeinfo));
                 printf("Text: [\r\n%s\r\n]\r\n\r\n", msg->msg);
 
                 // Check if SMS text contains known command
@@ -728,7 +713,7 @@ msg_read:
                     strftime(timebuf, 80, "%x %H:%M:%S", timeinfo);
                     sprintf(buf, "Hi, %s\rMy time is now\r%s", msg->from, timebuf);
 
-                    if (smsSend(sms_number, buf) == 1) {
+                    if (smsSend(config.msg.phone_number, buf) == 1) {
                         printf("Response sent successfully\r\n");
                     }
                     else {
@@ -755,51 +740,27 @@ msg_read:
         else
             printf("\r\nNo messages\r\n");
 
-        // ** We can turn off GSM RF to save power
-        gsm_RFOff();
-        // ** We can now go back on line, or stay off line **
-        // ppposInit();
-
-        ESP_LOGI(SMS_TAG, "Waiting %d sec...", EXAMPLE_TASK_PAUSE);
-        ESP_LOGI(SMS_TAG, "================================================================\n\n");
-
-        xSemaphoreGive(http_mutex);
-
-        for (int countdown = EXAMPLE_TASK_PAUSE; countdown >= 0; countdown--) {
-            BaseType_t retval;
-
-            retval = xQueueReceive(g_sms_config_queue, &sms_newconfig, 1000 / portTICK_PERIOD_MS);
-
-            if (retval == pdTRUE) {
-                ESP_LOGI(
-                  TAG,
-                  "\nNew configurations obtained!\nnew sms number = %s\nmsg text is: %s",
-                  sms_newconfig.new_sms_number,
-                  sms_newconfig.msg_text);
-
-                if (sms_newconfig.params_flags == 0)
-                    goto msg_read;
-
-                sms_time = 0;
-
-                if (sms_newconfig.params_flags & BIT(SMS_CONFIG_NEW_MESSAGE)) {
-                    ESP_LOGI(TAG, "copying new sms text to sms_text");
-                    strcpy(sms_text, sms_newconfig.msg_text);
-                }
-
-                if (sms_newconfig.params_flags & BIT(SMS_CONFIG_NEW_NUMBER)) {
-                    ESP_LOGI(TAG, "copying new sms number to sms_number");
-                    strcpy(sms_number, sms_newconfig.new_sms_number);
-                }
-
-                g_sms_number_not_default = true;
-
-                goto start;
-            }
+        if (config.send_sms) {
+            sms_send_sms(config.msg.phone_number, config.msg.text);
         }
+
+        gsm_RFOff();
+        xSemaphoreGive(http_mutex);
     }
+
+endtask:
+
+    if (config.msg.text != NULL) {
+        free(config.msg.text);
+    }
+
+    if (config.msg.phone_number != NULL) {
+        free(config.msg.phone_number);
+    }
+
+    vTaskDelete(NULL);
 }
-#endif
+#endif   // CONFIG_GSM_SEND_SMS
 
 #ifdef CONFIG_GSM_USE_WIFI_AP
 
@@ -840,16 +801,15 @@ esp32_wifi_eventHandler(void *ctx, system_event_t *event)
         for (int i = 0; i < sta_list.num; i++) {
             // Print the mac address of the connected station
             wifi_sta_info_t sta = sta_list.sta[i];
-            ESP_LOGD(
-              WEBSRV_TAG,
-              "Station %d MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-              i,
-              sta.mac[0],
-              sta.mac[1],
-              sta.mac[2],
-              sta.mac[3],
-              sta.mac[4],
-              sta.mac[5]);
+            ESP_LOGD(WEBSRV_TAG,
+                     "Station %d MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                     i,
+                     sta.mac[0],
+                     sta.mac[1],
+                     sta.mac[2],
+                     sta.mac[3],
+                     sta.mac[4],
+                     sta.mac[5]);
         }
         break;
     case SYSTEM_EVENT_AP_STADISCONNECTED:
@@ -982,13 +942,12 @@ http_get_fromInternet(struct netconn *conn, const char *request, uint8_t type)
 
     // Send the response to the client connected via WiFi AP
     if (hdr_end_ptr) {
-        ESP_LOGI(
-          WEBSRV_TAG,
-          "Received data: rlen=%d, total=%d, body=%d [%d]",
-          rlen,
-          totlen,
-          strlen(hdr_end_ptr),
-          clen);
+        ESP_LOGI(WEBSRV_TAG,
+                 "Received data: rlen=%d, total=%d, body=%d [%d]",
+                 rlen,
+                 totlen,
+                 strlen(hdr_end_ptr),
+                 clen);
     }
     else {
         ESP_LOGE(WEBSRV_TAG, "No header end found, rlen=%d", rlen);
@@ -1079,43 +1038,6 @@ http_server(void *pvParameters)
 
 #endif
 
-void
-indication_led_switch(bool turnON)
-{
-    if (turnON == true)
-        gpio_set_level(INDICATION_LED_PIN, 1);
-    else
-        gpio_set_level(INDICATION_LED_PIN, 0);
-}
-
-void
-sim800_switch_power(bool turnON)
-{
-    if (turnON == SIM800_PWR_ON)
-        gpio_set_level(SIM800_PWR_EN_PIN, 1);
-    else
-        gpio_set_level(SIM800_PWR_EN_PIN, 0);
-}
-
-void
-configure_pins(void)
-{
-    gpio_config_t conf;
-
-    conf.pin_bit_mask = (BIT(SIM800_PWR_EN_PIN) | BIT(INDICATION_LED_PIN));
-    conf.mode         = GPIO_MODE_OUTPUT;
-    conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    conf.pull_up_en   = GPIO_PULLUP_DISABLE;
-    conf.intr_type    = GPIO_INTR_DISABLE;
-
-    gpio_reset_pin(BIT(SIM800_PWR_EN_PIN));
-    gpio_reset_pin(BIT(INDICATION_LED_PIN));
-    gpio_config(&conf);
-
-    sim800_switch_power(SIM800_PWR_OFF);
-    indication_led_switch(false);
-}
-
 int32_t
 obtain_time(void)
 {
@@ -1193,12 +1115,24 @@ sim800_startUP(void)
     esp_err_t err;
     char      err_buf[CONFIG_ERR_BUFLEN];
 
-    console_commands_init();
-    configure_pins();
-    sim800_switch_power(true);
-    indication_led_switch(true);
+    // console_commands_init();
+    lillygo__config_gpio();
+    lillygo__sim800_switch_pwr(true);
+    lillygo__led_switch_pwr(true);
 
     http_mutex = xSemaphoreCreateMutex();
+
+    sms_config_queue = xQueueCreate(1, sizeof(cmd_gsm_queue_item_t));
+    if (sms_config_queue) {
+        ESP_LOGI(TAG, "sms config queue created");
+    }
+    else {
+        ESP_LOGE(TAG, "sms config queue creatinon failed");
+
+        while (1) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+    }
 
 #ifdef CONFIG_GSM_USE_WIFI_AP
     // ----- Set AP(STA)---------------------------------------------------
@@ -1210,6 +1144,7 @@ sim800_startUP(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+
     wifi_config_t apConfig = {
         .ap = { .ssid            = "ESP32_TESTAP",
                 .ssid_len        = 0,

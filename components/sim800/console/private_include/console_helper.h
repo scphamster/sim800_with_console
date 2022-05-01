@@ -36,5 +36,7 @@ typedef struct {
 
 void      console_helper_init(void);
 esp_err_t console_helper_free_memory(gsm_console_cmd_t *cmd);
-esp_err_t console_helper_decode_raw_command(
-  int argc, char **argv, gsm_console_cmd_t *cmd, char *err);
+esp_err_t console_helper_decode_raw_command(int                argc,
+                                            char             **argv,
+                                            gsm_console_cmd_t *cmd,
+                                            char              *err);

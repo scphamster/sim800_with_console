@@ -1,15 +1,16 @@
 #pragma once
-#define CONFIG_GSM_CONSOLE_ERR_DESCR_LEN    300
+#define CONFIG_GSM_CONSOLE_ERR_DESCR_LEN 300
 
-
-typedef enum {
+typedef enum
+{
     GSM_CONSOLE_NOERR = 0,
     GSM_CONSOLE_ERR1,
 
     GSM_CONSOLE_ERR_MAX
 } gsm_console_err_t;
 
-typedef enum {
+typedef enum
+{
     SMS_CONFIG_NEW_NUMBER = 0,
     SMS_CONFIG_NEW_MESSAGE
 } sms_config_param_flag_t;
@@ -22,8 +23,8 @@ typedef struct {
 } sim800_console_cmds_t;
 
 typedef struct {
-    char *new_sms_number;
-    char *msg_text;
+    char   *new_sms_number;
+    char   *msg_text;
     uint8_t params_flags;
 } sms_config_t;
 

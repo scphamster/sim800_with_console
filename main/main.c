@@ -21,8 +21,6 @@ app_main(void)
 {
     ESP_LOGI(TAG, "creating console task");
 
-    //ESP_LOGI(TAG, "this is message from test branch");
-
     xTaskCreatePinnedToCore(console_task, "console", 8000, NULL, 1, NULL, tskNO_AFFINITY);
     
     sim800_startUP();

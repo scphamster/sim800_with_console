@@ -74,3 +74,12 @@ config GSM_SMS_INTERVAL
 
 endmenu
 
+menu "GSM console"
+
+    config GSM_CONSOLE_DEBUG
+        bool "Enable GSM console debugging"
+        default y
+        help
+            Show GSM console debug messages
+    
+    endmenu
