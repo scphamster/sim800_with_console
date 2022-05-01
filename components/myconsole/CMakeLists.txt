@@ -33,3 +33,5 @@ idf_component_register(SRCS ${srce}
                         PRIV_INCLUDE_DIRS ${priv_include}
                         REQUIRES ${req}
                         PRIV_REQUIRES ${priv_req})
+
+add_compile_options(-Wfatal-errors)

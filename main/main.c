@@ -23,5 +23,5 @@ app_main(void)
 
     xTaskCreatePinnedToCore(console_task, "console", 8000, NULL, 1, NULL, tskNO_AFFINITY);
     
-    //sim800_startUP();
+    sim800_startUP();
 }
