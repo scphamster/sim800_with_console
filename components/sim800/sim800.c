@@ -185,16 +185,16 @@ parse_object(cJSON *item)
 static void
 https_get_task(void *pvParameters)
 {
+    char  buf[512];
+    char *buffer;
+    int   ret, flags, len, rlen = 0, totlen = 0;
+    
     if (!(xSemaphoreTake(http_mutex, TASK_SEMAPHORE_WAIT))) {
         ESP_LOGE(HTTPS_TAG, "*** ERROR: CANNOT GET MUTEX ***n");
         while (1) {
             vTaskDelay(10000 / portTICK_PERIOD_MS);
         }
     }
-
-    char  buf[512];
-    char *buffer;
-    int   ret, flags, len, rlen = 0, totlen = 0;
 
     buffer = malloc(8192);
     if (!buffer) {
@@ -1039,7 +1039,6 @@ sim800_startUP(void)
     esp_err_t err;
     char      err_buf[CONFIG_ERR_BUFLEN];
 
-    // console_commands_init();
     lillygo__config_gpio();
     lillygo__sim800_switch_pwr(true);
     lillygo__led_switch_pwr(true);
@@ -1048,7 +1047,7 @@ sim800_startUP(void)
 
     sms_config_queue = xQueueCreate(1, sizeof(cmd_gsm_queue_item_t));
     if (sms_config_queue) {
-        ESP_LOGI(TAG, "sms config queue created");
+        CMD_GSM_LOG(TAG, "sms config queue created");
     }
     else {
         ESP_LOGE(TAG, "sms config queue creatinon failed");

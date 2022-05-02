@@ -44,6 +44,12 @@
 #define GSM_CONTINUE  ESP_OK
 #define GSM_RECONNECT ESP_ERR_TIMEOUT
 
+#define PPPOS_RQEST_TO_DISCONNECT 0
+#define PPPOS_RQEST_TO_CONNECT    1
+
+#define PPPOS_TASK_STATUS_IDLE    0
+#define PPPOS_TASK_STATUS_STARTED 1
+
 #define GSM_INIT_CMDS_NUM (sizeof(GSM_Init) / sizeof(GSM_Cmd *))
 
 // shared variables, use mutex to access them
@@ -163,8 +169,13 @@ static GSM_Cmd *GSM_Init[] = {
     &cmd_Pin, &cmd_Reg,   &cmd_APN,     &cmd_Connect,
 };
 
-// PPP status callback
-//--------------------------------------------------------------
+/**
+ * @brief PPP status callback
+ *
+ * @param pcb
+ * @param err_code
+ * @param ctx
+ */
 static void
 ppp_status_cb(ppp_pcb *pcb, int err_code, void *ctx)
 {
@@ -278,8 +289,15 @@ ppp_status_cb(ppp_pcb *pcb, int err_code, void *ctx)
     }
 }
 
-// === Handle sending data to GSM modem ===
-//------------------------------------------------------------------------------
+/**
+ * @brief Handle sending data to GSM modem
+ *
+ * @param pcb
+ * @param data
+ * @param len
+ * @param ctx
+ * @return u32_t
+ */
 static u32_t
 ppp_output_callback(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx)
 {
@@ -318,7 +336,20 @@ post_command_to_ESP_LOGI(char *cmd, int cmdSize, char *TAG2)
 #endif
 }
 
-//----------------------------------------------------------------------------------------------------------------------
+/**
+ * @brief send AT command cmd to module and read answer
+ *
+ * @param cmd command to send
+ * @param desired_resp_pri return 1 if this answer occured
+ * @param desired_resp_sec return 2 if this answer occured
+ * @param cmdSize
+ * @param timeout
+ * @param[out] resp_return_buff buffer to pack answer string
+ * @param size resp_return_buff size
+ *
+ * @return int 0 if fail, 1 or 2 if pri or sec desired_resp occured, number of bytes if
+ * resp_return_buff is not NULL
+ */
 static int
 sendATcmd_checkAnswer(char  *cmd,
                       char  *desired_resp_pri,
@@ -341,9 +372,7 @@ sendATcmd_checkAnswer(char  *cmd,
         if (cmdSize == -1)
             cmdSize = strlen(cmd);
 
-#if GSM_DEBUG
         post_command_to_ESP_LOGI(cmd, cmdSize, "AT COMMAND:");
-#endif
 
         uart_write_bytes(g_uart_module_num, (const char *)cmd, cmdSize);
         uart_wait_tx_done(g_uart_module_num, 100 / portTICK_RATE_MS);
@@ -402,25 +431,19 @@ sendATcmd_checkAnswer(char  *cmd,
         else if (total_len > 0) {
             // Check the response
             if (strstr(resp_buf, desired_resp_pri) != NULL) {
-#if GSM_DEBUG
-                ESP_LOGI(TAG, "AT RESPONSE: [%s]", resp_buf);
-#endif
+                GSM_LOG(TAG, "AT RESPONSE: [%s]", resp_buf);
 
                 break;
             }
             else if ((desired_resp_sec != NULL) && (strstr(resp_buf, desired_resp_sec) != NULL)) {
-#if GSM_DEBUG
-                ESP_LOGI(TAG, "AT RESPONSE (1): [%s]", resp_buf);
-#endif
+                GSM_LOG(TAG, "AT RESPONSE (1): [%s]", resp_buf);
 
                 retval = 2;
                 break;
             }
-            else {
-// no match
-#if GSM_DEBUG
-                ESP_LOGI(TAG, "AT BAD RESPONSE: [%s]", resp_buf);
-#endif
+            else {   // no match
+
+                GSM_LOG(TAG, "AT BAD RESPONSE: [%s]", resp_buf);
 
                 retval = 0;
                 break;
@@ -429,11 +452,8 @@ sendATcmd_checkAnswer(char  *cmd,
 
         timeoutCnt += 10;
 
-        if (timeoutCnt > timeout) {
-// timeout
-#if GSM_DEBUG
-            ESP_LOGE(TAG, "AT: TIMEOUT");
-#endif
+        if (timeoutCnt > timeout) {   // timeout
+            GSM_LOG(TAG, "AT: TIMEOUT");
 
             retval = 0;
             break;
@@ -443,7 +463,7 @@ sendATcmd_checkAnswer(char  *cmd,
     return retval;
 }
 
-//------------------------------------
+
 static void
 _disconnect(uint8_t rfOff)
 {
@@ -503,7 +523,10 @@ _disconnect(uint8_t rfOff)
     GSM_LOG(TAG, "DISCONNECTED.");
 }
 
-//----------------------------
+/**
+ * @brief set all commands' init flag to "uninitialized" state
+ * 
+ */
 static void
 _reset_init_commands()
 {
@@ -626,7 +649,6 @@ _pppapi_pppos_create(void)
     if (g_gsm_status == GSM_STATE_FIRSTINIT) {
         xSemaphoreGive(pppos_mutex);
 
-        // ** After first successful initialization create PPP control block
         GSM_LOG(TAG, "pppapi_pppos_create\n file = %s, line = %d", __FILE__, __LINE__);
         ppp = pppapi_pppos_create(&ppp_netif, ppp_output_callback, ppp_status_cb, NULL);
 
@@ -764,7 +786,7 @@ pppos_client_task()
     esp_err_t retval;
 
     xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-    g_pppos_task_started = 1;
+    g_pppos_task_started = PPPOS_TASK_STATUS_STARTED;
     xSemaphoreGive(pppos_mutex);
 
     // Allocate receive buffer
@@ -811,7 +833,7 @@ pppos_client_task()
             if (_gsm_is_disconnected()) {
                 break;
             }
-            
+
             _handle_data_from_gsm(data);
 
         }   // Handle GSM modem responses & disconnects loop
@@ -832,7 +854,6 @@ exit:
     vTaskDelete(NULL);
 }
 
-//=============
 int
 ppposInit()
 {
@@ -847,7 +868,7 @@ ppposInit()
     if (pppos_mutex != NULL)
         xSemaphoreGive(pppos_mutex);
 
-    if (pppos_task_started == 0) {
+    if (pppos_task_started == PPPOS_TASK_STATUS_IDLE) {
         if (pppos_mutex == NULL)
             pppos_mutex = xSemaphoreCreateMutex();
 
@@ -866,7 +887,7 @@ ppposInit()
                     10,
                     NULL);
 
-        while (pppos_task_started == 0) {
+        while (pppos_task_started == PPPOS_TASK_STATUS_IDLE) {
             vTaskDelay(10 / portTICK_RATE_MS);
 
             xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
@@ -875,7 +896,7 @@ ppposInit()
         }
     }
 
-    while (gsm_status != 1) {
+    while (gsm_status != GSM_STATE_CONNECTED) {
         vTaskDelay(10 / portTICK_RATE_MS);
 
         xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
@@ -883,14 +904,13 @@ ppposInit()
         pppos_task_started = g_pppos_task_started;
         xSemaphoreGive(pppos_mutex);
 
-        if (pppos_task_started == 0)
+        if (pppos_task_started == PPPOS_TASK_STATUS_IDLE)
             return 0;
     }
 
     return 1;
 }
 
-//===================================================
 void
 ppposDisconnect(uint8_t end_task, uint8_t rfoff)
 {
@@ -931,7 +951,6 @@ ppposDisconnect(uint8_t end_task, uint8_t rfoff)
     }
 }
 
-//===================
 int
 ppposStatus()
 {
@@ -942,7 +961,6 @@ ppposStatus()
     return gstat;
 }
 
-//========================================================
 void
 getRxTxCount(uint32_t *rx, uint32_t *tx, uint8_t rst)
 {
@@ -956,7 +974,6 @@ getRxTxCount(uint32_t *rx, uint32_t *tx, uint8_t rst)
     xSemaphoreGive(pppos_mutex);
 }
 
-//===================
 void
 resetRxTxCount()
 {
@@ -966,7 +983,6 @@ resetRxTxCount()
     xSemaphoreGive(pppos_mutex);
 }
 
-//=============
 int
 gsm_RFOff()
 {
@@ -1000,7 +1016,6 @@ gsm_RFOff()
     return 1;
 }
 
-//============
 int
 gsm_RFOn()
 {
@@ -1036,7 +1051,6 @@ gsm_RFOn()
     return 1;
 }
 
-//--------------------
 static int
 module_is_in_text_mode_and_active()
 {
@@ -1056,7 +1070,6 @@ module_is_in_text_mode_and_active()
     return 1;
 }
 
-//==================================
 int
 smsSend(char *smsnum, char *msg)
 {
