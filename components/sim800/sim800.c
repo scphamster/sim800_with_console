@@ -7,26 +7,32 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 
 #include "esp_system.h"
-#include "esp_wifi.h"
 #include "esp_event_loop.h"
+#include <esp_event.h>
+#include "esp_err.h"
 #include "esp_log.h"
+#include <esp_wifi.h>
+#include "esp_console.h"
+
 #include "nvs_flash.h"
-#include "freertos/semphr.h"
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "hal/gpio_types.h"
 
+#include "netif/ppp/pppapi.h"
 #include "netif/ppp/pppos.h"
 #include "netif/ppp/ppp.h"
+
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
-#include "netif/ppp/pppapi.h"
+#include "lwip/apps/sntp.h"
 
 #include "mbedtls/platform.h"
 #include "mbedtls/net.h"
@@ -37,24 +43,14 @@
 #include "mbedtls/error.h"
 #include "mbedtls/certs.h"
 
-#include <esp_event.h>
-#include "esp_err.h"
-#include "esp_log.h"
-#include <esp_wifi.h>
-#include "esp_console.h"
-
-#include "lwip/apps/sntp.h"
 #include "cJSON.h"
 
-#include "gsm.h"
 #include "sim800.h"
+#include "gsm.h"
 #include "cmd_gsm.h"
 #include "sms.h"
-
+#include "web_defs.h"
 #include "lillygo.h"
-//#include "console_commands.h"
-
-
 
 #ifdef CONFIG_GSM_USE_WIFI_AP
 #include "lwip/api.h"
@@ -62,7 +58,7 @@
 #include "lwip/netdb.h"
 #endif
 
-#define EXAMPLE_TASK_PAUSE  5        // pause between task runs in seconds
+#define EXAMPLE_TASK_PAUSE  5
 #define TASK_SEMAPHORE_WAIT 140000   // time to wait for mutex in miliseconds
 
 QueueHandle_t http_mutex;
@@ -98,17 +94,6 @@ const static char  http_index_html[] =
 // ===============================================================================================
 // ==== Http/Https get requests ==================================================================
 // ===============================================================================================
-
-// Constants that aren't configurable in menuconfig
-#define WEB_SERVER "loboris.eu"
-#define WEB_PORT   80
-#define WEB_URL    "http://loboris.eu/ESP32/info.txt"
-#define WEB_URL1   "http://loboris.eu"
-
-#define SSL_WEB_SERVER "www.howsmyssl.com"
-#define SSL_WEB_URL    "https://www.howsmyssl.com/a/check"
-#define SSL_WEB_PORT   "443"
-
 static const char *REQUEST = "GET " WEB_URL " HTTP/1.1\r\n"
                              "Host: " WEB_SERVER "\r\n"
                              "User-Agent: esp-idf/1.0 esp32\r\n"
@@ -629,11 +614,10 @@ finished:
 static void
 sms_task(void *pvParameters)
 {
-    char                 buf[160];
     esp_err_t            retval;
     cmd_gsm_queue_item_t newconfig;
     cmd_gsm_queue_item_t config;
-    SMS_Messages         messages;
+    GSM_sms              messages;
 
     config.msg.phone_number = NULL;
     config.msg.text         = NULL;
@@ -677,68 +661,8 @@ sms_task(void *pvParameters)
 
         if (config.read_sms) {
             smsRead(&messages, -1);
+            sms_handle_received_sms(&messages, &config);
         }
-
-        if (messages.nmsg) {
-            SMS_Msg *msg;
-            msg = messages.messages;
-
-            printf("\r\nReceived messages number: %d\r\n", messages.nmsg);
-
-            for (int i = 0; i < messages.nmsg; i++) {
-                struct tm *timeinfo;
-
-                msg += (i * sizeof(SMS_Msg));
-
-                timeinfo = localtime(&msg->time_value);
-                printf("-------------------------------------------\r\n");
-                printf("Message #%d: idx=%d, from: %s, status: %s, time: %s, tz=GMT+%d, timestamp: "
-                       "%s\r\n",
-                       i + 1,
-                       msg->idx,
-                       msg->from,
-                       msg->stat,
-                       msg->time,
-                       msg->tz,
-                       asctime(timeinfo));
-                printf("Text: [\r\n%s\r\n]\r\n\r\n", msg->msg);
-
-                // Check if SMS text contains known command
-                if (strstr(msg->msg, "Esp32 info") == msg->msg) {
-                    char   timebuf[80];
-                    time_t rawtime;
-
-                    time(&rawtime);
-                    timeinfo = localtime(&rawtime);
-                    strftime(timebuf, 80, "%x %H:%M:%S", timeinfo);
-                    sprintf(buf, "Hi, %s\rMy time is now\r%s", msg->from, timebuf);
-
-                    if (smsSend(config.msg.phone_number, buf) == 1) {
-                        printf("Response sent successfully\r\n");
-                    }
-                    else {
-                        printf("Response send failed\r\n");
-                    }
-                }
-
-                // Free allocated message text buffer
-                if (msg->msg)
-                    free(msg->msg);
-
-                if ((i + 1) == messages.nmsg) {
-                    printf("Delete message at index %d\r\n", msg->idx);
-
-                    if (smsDelete(msg->idx) == 0)
-                        printf("Delete ERROR\r\n");
-                    else
-                        printf("Delete OK\r\n");
-                }
-            }
-
-            free(messages.messages);
-        }
-        else
-            printf("\r\nNo messages\r\n");
 
         if (config.send_sms) {
             sms_send_sms(config.msg.phone_number, config.msg.text);

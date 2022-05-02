@@ -15,7 +15,7 @@
 #include "sim800.h"
 #include "cmd_gsm.h"
 #include "cmd_gsm_private.h"
-#include "console_helper2.h"
+#include "cmd_parser.h"
 
 static const char  *TAG               = "console helper";
 static uint32_t     n_allocated_items = 0;
@@ -160,7 +160,7 @@ esp_err_t
 send_sms__check_args(send_sms_cmd_args_t *cmd, char *errbuf)
 {
     CMD_GSM_LOG(TAG, "processing arguments...");
-
+    
     if (cmd->number->count) {
         uint8_t      count = cmd->number->count;
         const char **str   = cmd->number->sval;
@@ -191,15 +191,27 @@ send_sms__check_args(send_sms_cmd_args_t *cmd, char *errbuf)
 static void
 _post_data__prepare_data(cmd_gsm_queue_item_t *sms_config, send_sms_cmd_args_t *cmd)
 {
-    sms_config->msg.text = cmd->message->sval[0];
-    sms_config->msg.phone_number  = cmd->number->sval[0];
+    if (cmd->send->count) {
+        sms_config->send_sms = true;
+        CMD_GSM_LOG(TAG, "Sending to queue: send sms");
+    }
+    
+    if (cmd->message->count) {
+        sms_config->msg.text = cmd->message->sval[0];
+        sms_config->new_sms_send_config = true;
+        CMD_GSM_LOG(TAG, "Sending to queue: message: %s", sms_config->msg.text);
+    }
 
+    if (cmd->number->count) {
+        sms_config->msg.phone_number  = cmd->number->sval[0];
+        sms_config->new_sms_send_config = true;
+        CMD_GSM_LOG(TAG, "Sending to queue: number: %s", sms_config->msg.phone_number);
+    }
+
+    sms_config->read_sms = true;
+    
     sms_config->response.msg       = NULL;
     sms_config->response.resp_type = 0;
-
-    sms_config->send_sms = true;
-    sms_config->new_sms_send_config = true;
-    sms_config->read_sms = true;
     sms_config->new_response_config = false;
 }
 
@@ -226,16 +238,10 @@ _post_data__wait_for_reception(void)
 esp_err_t
 send_sms__post_data(send_sms_cmd_args_t *cmd, char *errbuf)
 {
-    esp_err_t            retval;
     BaseType_t           qretval;
     cmd_gsm_queue_item_t sms_config;
 
     _post_data__prepare_data(&sms_config, cmd);
-
-    CMD_GSM_LOG(TAG,
-                "sending to queue:\nNumber: %s\nMessage: %s",
-                sms_config.msg.phone_number,
-                sms_config.msg.text);
 
     qretval = xQueueSend(sms_config_queue, &sms_config, 0);
 

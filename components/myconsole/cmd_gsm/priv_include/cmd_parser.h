@@ -2,6 +2,9 @@
 
 #include "cmd_gsm_private.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 /**
  * @brief should be invoked after send_sms__check_args(), when cmd struct is not needed anymore
  *
@@ -29,3 +32,7 @@ esp_err_t send_sms__check_args(send_sms_cmd_args_t *cmd, char *errbuf);
  * @return esp_err_t ESP_OK on success or error code on fail
  */
 esp_err_t send_sms__post_data(send_sms_cmd_args_t *cmd, char *errbuf);
+
+#ifdef __cpluplus
+}
+#endif

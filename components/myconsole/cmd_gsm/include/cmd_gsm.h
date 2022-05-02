@@ -3,6 +3,10 @@
 #include "sdkconfig.h"
 #include "esp_log.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define CMD_GSM_NUMBER_CHAR_QTY 12   // '+', country code - 2, number - 9.
 
 #if (CONFIG_GSM_DEBUG == 1)
@@ -37,4 +41,8 @@ typedef struct {
     cmd_gsm_response_cfg_t response;
 } cmd_gsm_queue_item_t;
 
-void cmd_gsm__register_commands(void);
+void register_gsm(void);
+
+#ifdef __cplusplus
+}
+#endif

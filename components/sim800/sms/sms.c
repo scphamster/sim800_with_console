@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -111,4 +112,74 @@ sms_send_sms(const char *sms_number, const char *sms_text)
 
         return ESP_FAIL;
     }
+}
+
+esp_err_t
+sms_handle_received_sms(GSM_sms *messages, cmd_gsm_queue_item_t *config)
+{
+    if (messages->nmsg == 0) {
+        ESP_LOGI(TAG, "No SMS'es received");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    char     buf[SMS_TEXT_MAXLEN + 1];
+    char    *timestring;
+    GSM_sms_msg *msg;
+
+    ESP_LOGI(TAG, "Received messages number: %d", messages->nmsg);
+
+    for (int i = 0; i < messages->nmsg; i++) {
+        struct tm *timeinfo;
+
+        msg = &(messages->messages[i]);
+
+        timeinfo  = localtime(&msg->time_value);
+        timestring = asctime(timeinfo);
+
+        printf("-------------------------------------------\r\n");
+        printf("\nMessage #%d: idx=%d, from: %s, status: %s, time: %s, tz=GMT+%d, timestamp:%s\n",
+               i + 1,
+               msg->idx,
+               msg->from,
+               msg->stat,
+               msg->time,
+               msg->tz,
+               timestring);
+        printf("Message text:\n%s\n", msg->msg);
+
+        // Check if SMS text contains known command
+        if (strstr(msg->msg, "Esp32 info") == msg->msg) {
+            char   timestr[80];
+            time_t rawtime;
+
+            time(&rawtime);
+            timeinfo = localtime(&rawtime);
+            strftime(timestr, 80, "%x %H:%M:%S", timeinfo);
+            sprintf(buf, "Hi, %s\rMy time is now\r%s", msg->from, timestr);
+
+            if (smsSend(config->msg.phone_number, buf) == 1) {
+                ESP_LOGI(TAG, "Response sent successfully\n");
+            }
+            else {
+                ESP_LOGW(TAG, "Response send failed\n");
+            }
+        }
+
+        // Free allocated message text buffer
+        if (msg->msg)
+            free(msg->msg);
+
+        if ((i + 1) == messages->nmsg) {
+            printf("Delete message at index %d\r\n", msg->idx);
+
+            if (smsDelete(msg->idx) == 0)
+                printf("Delete ERROR\r\n");
+            else
+                printf("Delete OK\r\n");
+        }
+    }
+
+    free(messages->messages);
+
+    return ESP_OK;
 }

@@ -145,7 +145,7 @@ _init(void)
     register_system();
     register_wifi();
     register_nvs();
-    cmd_gsm__register_commands();
+    register_gsm();
 }
 
 void

@@ -4,7 +4,7 @@ set(srce
     "cmd_system/cmd_system.c"
     "cmd_wifi/cmd_wifi.c"
     "cmd_gsm/cmd_gsm.c"
-    "cmd_gsm/console_helper2.c")
+    "cmd_gsm/cmd_parser.c")
 
 set(include_dirs
     "include"    

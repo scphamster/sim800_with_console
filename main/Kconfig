@@ -26,6 +26,13 @@ config GSM_BDRATE
     help
 	UART baudrate to comunicate with GSM module
 
+config GSM_UART_MODULE_NUM
+    int "UART module number to use"
+    default UART_NUM_1
+    range 0 1
+    help
+    UART module number to use for connection to SIM800L module.
+
 config GSM_INTERNET_USER
     string "Internet User"
 	default ""

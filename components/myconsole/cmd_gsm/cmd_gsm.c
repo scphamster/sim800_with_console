@@ -25,7 +25,7 @@
 
 #include "sim800.h"
 #include "cmd_gsm.h"
-#include "console_helper2.h"
+#include "cmd_parser.h"
 
 static const char         *TAG = "CMD_GSM";
 static send_sms_cmd_args_t Sms_args;
@@ -63,25 +63,28 @@ send_sms(int argc, char **argv)
 }
 
 void
-cmd_gsm__register_commands(void)
+register_gsm(void)
 {
-    Sms_args.number = arg_strn("-n",
-                               "--number",
+    Sms_args.number = arg_strn("n",
+                               "number",
                                "<string>",
                                SMS_SEND_CMD_NUMBER_MINCOUNT,
                                SMS_SEND_CMD_NUMBER_MAXCOUNT,
                                "recipient phone number");
 
-    Sms_args.message = arg_strn("-m",
-                                "--message",
+    Sms_args.message = arg_strn("m",
+                                "message",
                                 "<string>",
                                 SEND_SMS_CMD_MESSAGE_MINCOUNT,
                                 SEND_SMS_CMD_MESSAGE_MAXCOUNT,
                                 "message for recipient");
 
+    Sms_args.send = arg_lit0("s", "send", "send sms");
+    Sms_args.read = arg_lit0("r", "read", "read sms");
+
     Sms_args.end = arg_end(SEND_SMS_CMD_ARGUMENT_NUM);
 
-    const esp_console_cmd_t cmd = { .command  = "send_sms",
+    const esp_console_cmd_t cmd = { .command  = "sms",
                                     .help     = "Send sms to desired phone number. ",
                                     .hint     = "<number> <message>",
                                     .func     = send_sms,

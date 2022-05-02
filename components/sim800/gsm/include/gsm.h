@@ -2,18 +2,17 @@
  *  Author: LoBo (loboris@gmail.com, loboris.github)
  *
 */
-#ifndef _LIBGSM_H_
-#define _LIBGSM_H_
+#pragma once
 
 #define GSM_STATE_DISCONNECTED	0
 #define GSM_STATE_CONNECTED		1
 #define GSM_STATE_IDLE			89
 #define GSM_STATE_FIRSTINIT		98
 
-/**
- * @brief SMS message struct
- * 
- */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct
 {
 	int		idx;
@@ -23,13 +22,13 @@ typedef struct
 	char	time[32];
 	time_t	time_value;
 	int		tz;
-}SMS_Msg;
+}GSM_sms_msg;
 
 typedef struct
 {
 	int		nmsg;
-	SMS_Msg	*messages;
-}SMS_Messages;
+	GSM_sms_msg	*messages;
+}GSM_sms;
 
 extern struct netif ppp_netif;
 
@@ -98,11 +97,13 @@ int gsm_RFOn();
 //==================================
 int smsSend(char *smsnum, char *msg);
 
-/*
- * Read all SMS messages to 'SMS_Messages' structure
+/**
+ * @brief Read all SMS messages to 'GSM_sms' structure
+ * 
+ * @param SMSmesg messages structure
+ * @param sort sorting mechanism
  */
-//============================================
-void smsRead(SMS_Messages *SMSmesg, int sort);
+void smsRead(GSM_sms *SMSmesg, int sort);
 
 /**
  * @brief delete SMS message of index idx
@@ -113,5 +114,6 @@ void smsRead(SMS_Messages *SMSmesg, int sort);
  */
 int smsDelete(int idx);
 
-
+#ifdef __cpluplus
+}
 #endif

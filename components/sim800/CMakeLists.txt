@@ -1,7 +1,7 @@
 set(source
     "sim800.c" 
-    "console/console.c" 
-    "console/console_helper.c"
+    #"console/console.c" 
+    #"console/console_helper.c"
     "gsm/gsm.c"
     "sms/sms.c")
 
@@ -19,12 +19,12 @@ set(priv_req
     "lillygo" )
 
 set(priv_include
-    "console/private_include"
+    #"console/private_include"
     "priv_include")
 
 set(include
     "include" 
-    "console/include" 
+    #"console/include" 
     "gsm/include"
     "sms/include")
 

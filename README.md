@@ -6,7 +6,8 @@
   - console example (default console example from esp-idf within vscode)
  
  My contribution is component:
-  - components/sim800/console
+  - components/myconsole/cmd_gsm/
+  - components/sim800/sms/
 
 # How to start project
  I do not know
